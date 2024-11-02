@@ -9,7 +9,7 @@ bits 16
 ;
 ;	FAT12 header
 ;
-jmp short start
+jmp short main
 nop
 
 ; BIOS parameter block
@@ -41,11 +41,10 @@ ebr_system_id:					db "FAT12   "
 ;	Instructions
 ;
 
-start:
-	jmp main
-
 ;	Print character to the screen.
-;	Expects string address in ds:si
+;	Parameters:
+;		si: string address
+;
 puts:
 	; Preserve register values
 	push si
@@ -83,7 +82,7 @@ puts:
 
 main:
 	; Clear registers
-	mov ax, 0
+	xor ax, ax
 	mov ds, ax
 	mov es, ax
 	mov ss, ax
@@ -103,6 +102,63 @@ main:
 ; Infinite loop in case hlt doesn't work
 .halt:
 	jmp .halt
+
+
+;
+;	Disk routines
+;
+
+;	Convert LBA address to CHS address
+;	Parameters:
+;		ax: LBA address
+;	Retuns:
+;		cx[0:5]: sector number
+;		cx[6:15]: cylinder number
+;		dh: head number
+;
+lba_to_chs:
+	; Preserve register
+	push ax
+	push dx
+
+	;
+	;	sector number
+	;
+	; ax = LBA / bdb_sectors_per_track
+	; cx = dx = LBA % bdb_sectors_per_track + 1
+	xor dx, dx
+	div word [bdb_sectors_per_track]
+	inc dx
+	mov cx, dx
+
+	;
+	;	cylinder and head number
+	;
+	xor dx, dx
+	div word [bdb_head_count]
+
+	; dh = dx = ax % bdb_head_count =
+	; = (LBA / bdb_sectors_per_track) % bdb_head_count = head number
+	mov dh, dl	; dl is lower 8 bits of dx
+
+	; ax = ax / bdb_head_count =
+	; = (LBA / bdb_sectors_per_track) / bdb_head_count = cylinder number
+	;
+	;			CX
+	;	CH		+		CL
+	;
+	;	CH + CL[8:6] = cylinder numcer
+	;	CL[0:5] = sector number
+	mov ch, al	; al is lower 8 bits of ax
+	shl ah, 6	; ah is upper 8 bits of ax
+	or cl, ah
+
+
+	; Restore registers
+	pop ax
+	mov dl, al
+	pop ax
+	ret
 
 
 ; Define end line escape sequence
