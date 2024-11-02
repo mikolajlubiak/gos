@@ -43,7 +43,7 @@ ebr_system_id:					db "FAT12   "
 
 ;	Print character to the screen.
 ;	Parameters:
-;		si: string address
+;		ds:si: string address
 ;
 puts:
 	; Preserve register values
@@ -90,23 +90,52 @@ main:
 	; Set stack pointer to the bottom address of the program
 	mov sp, 0x7C00
 
-	; Store string pointer in ds:si
-	mov si, msg_hello_world
+	; BIOS should store the driver number in the dl register
+	mov [ebr_drive_number], dl
 
-	; Call the procedure
-	call puts
+	; Populate the disk_read parameters
+	mov ax, 1 ; LBA = 1, second sector
+	mov cl, 1 ; Read 1 sector
+	mov bx, 0x7E00 ; Store the data below instructions
+
+	; Read the data
+	call disk_read
 
 	; Halt
+	jmp halt
+
+
+; Halt indefinitely
+halt:
+	cli ; Disable interrupts so that there is no way to get out of the halt
 	hlt
 
-; Infinite loop in case hlt doesn't work
-.halt:
-	jmp .halt
+; Wait for a key press, then reboot
+wait_key_and_reboot:
+	; Wait the a key press
+	mov ah, 0
+	int 16h
+
+	; Reboot
+	jmp 0FFFFh:0
+
+	; Halt
+	jmp halt
+
 
 
 ;
 ;	Disk routines
 ;
+
+; Print error message and reboot
+floppy_error:
+	; Print the error message
+	mov si, msg_floppy_error
+	call puts
+
+	jmp wait_key_and_reboot
+
 
 ;	Convert LBA address to CHS address
 ;	Parameters:
@@ -126,6 +155,7 @@ lba_to_chs:
 	;
 	; ax = LBA / bdb_sectors_per_track
 	; cx = dx = LBA % bdb_sectors_per_track + 1
+	;
 	xor dx, dx
 	div word [bdb_sectors_per_track]
 	inc dx
@@ -134,16 +164,15 @@ lba_to_chs:
 	;
 	;	cylinder and head number
 	;
-	xor dx, dx
-	div word [bdb_head_count]
-
-	; dh = dx = ax % bdb_head_count =
-	; = (LBA / bdb_sectors_per_track) % bdb_head_count = head number
-	mov dh, dl	; dl is lower 8 bits of dx
-
 	; ax = ax / bdb_head_count =
 	; = (LBA / bdb_sectors_per_track) / bdb_head_count = cylinder number
+	; dh = dx = ax % bdb_head_count =
+	; = (LBA / bdb_sectors_per_track) % bdb_head_count = head number
 	;
+	xor dx, dx
+	div word [bdb_head_count]
+	mov dh, dl	; dl is lower 8 bits of dx
+
 	;			CX
 	;	CH		+		CL
 	;
@@ -161,11 +190,102 @@ lba_to_chs:
 	ret
 
 
+;
+;	Read from disk
+;	Parameters:
+;		ax: LBA address
+;		cl: number of sectors to read
+;		dl: driver number
+;		es:bx: memory address to store the data
+;
+disk_read:
+	; Preserve registers
+	push ax
+	push bx
+	push cx
+	push dx
+	push di
+	push cx ; Save CL
+
+	; Convert the address
+	call lba_to_chs
+
+	; Pop the previously pushed CX. Write CL to AL
+	pop ax
+
+	; Set flag to read disk sectors
+	mov ah, 02h
+
+	; Retry the read operation 3 times. Floppy disks can be pretty unreliable.
+	mov di, 3
+
+.retry
+	; Save all registers, we don't know what BIOS will override
+	pusha
+
+	; Set carry flag, some BIOSes don't do that automatically
+	stc
+
+	; Interrupt
+	int 13h
+
+	; If the carry flag is unset the operation succeeded
+	jnc .done
+
+	; If the operation failed restore the registers and reset the floppy controller
+	popa
+	call disk_reset
+
+	; Retry until di is not zero: 3 times
+	dec di
+	test di, di
+	jnz .retry
+
+.fail:
+	; Failed 3 times
+	jmp floppy_error
+
+; If succeeded, restore the registers
+.done:
+	popa
+
+	; Restore registers and return
+	pop di
+	pop dx
+	pop cx
+	pop bx
+	pop ax
+	ret
+
+
+;
+;	Disk reset
+;	Parameters:
+;		dl: driver number
+;
+disk_reset:
+	; Preserve registers
+	pusha
+
+	; Reset the floppy
+	mov ah, 0
+	stc
+	int 13h
+
+	; If failed print error and reboot
+	jc floppy_error
+
+	; Restore the registers and return
+	popa
+	ret
+
+
+
 ; Define end line escape sequence
 %define ENDL 0x0D, 0x0A
 
 ; Store the string
-msg_hello_world: db "Hello, world!", ENDL, 0
+msg_floppy_error: 		db "Read from floppy failed 3 times. KERNEL PAAAAAAAAANIC!", ENDL, 0
 
 
 ; Add padding until we reach 510 bytes
