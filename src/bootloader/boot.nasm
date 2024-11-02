@@ -4,6 +4,43 @@ org 0x7C00
 ; Tell the assembler to compile 16 bit code
 bits 16
 
+
+
+;
+;	FAT12 header
+;
+jmp short start
+nop
+
+; BIOS parameter block
+bdb_oem:						db "MSWIN4.1"
+bdb_bytes_per_sector:			dw 512
+bdb_sectors_per_cluster:		db 1
+bdb_reserved_sectors:			dw 1
+bdb_fat_count:					db 2
+bdb_dir_entries:				dw 0E0h
+bdb_total_sectors:				dw 2880
+bdb_media_descriptor_type:		db 0F0h
+bdb_sectors_per_fat:			dw 9
+bdb_sectors_per_track:			dw 18
+bdb_head_count:					dw 2
+bdb_hidden_sectors:				dd 0
+bdb_large_sectors:				dd 0
+
+; Extended boot record
+ebr_drive_number:				db 0
+								db 0
+ebr_signature:					db 29h
+ebr_volume_id:					db 1h, 2h, 3h, 4h
+ebr_volume_label:				db "GALL OS INC"
+ebr_system_id:					db "FAT12   "
+
+
+
+;
+;	Instructions
+;
+
 start:
 	jmp main
 
@@ -31,6 +68,7 @@ puts:
 	mov bh, 0
 
 	; Interrupt
+	; The interrupt excpets the character to print to be in the al register
 	int 0x10
 
 	; Loop
