@@ -62,22 +62,25 @@ uint8_t readSectors(FILE *const disk, const BootSector *const boot_sector,
 }
 
 uint8_t readFat(FILE *const disk, const BootSector *const boot_sector,
-                uint8_t *file_allocation_table) {
-  file_allocation_table = (uint8_t *)malloc(boot_sector->SectorsPerFat *
-                                            boot_sector->BytesPerSector);
+                uint8_t **file_allocation_table) {
+  *file_allocation_table = (uint8_t *)malloc(boot_sector->SectorsPerFat *
+                                             boot_sector->BytesPerSector);
 
   return readSectors(disk, boot_sector, boot_sector->ReservedSectors,
-                     boot_sector->SectorsPerFat, file_allocation_table);
+                     boot_sector->SectorsPerFat, *file_allocation_table);
 }
 
 uint8_t readRootDirectory(FILE *const disk, const BootSector *const boot_sector,
-                          DirectoryEntry **root_directory) {
+                          DirectoryEntry **root_directory,
+                          uint32_t *root_directory_end) {
   uint32_t lba = boot_sector->ReservedSectors +
                  boot_sector->SectorsPerFat * boot_sector->FatCount;
 
   uint32_t size = sizeof(DirectoryEntry) * boot_sector->DirEntryCount;
   uint32_t sectors = (((int32_t)(size + boot_sector->BytesPerSector) - 1) /
                       boot_sector->BytesPerSector);
+
+  *root_directory_end = lba + sectors;
 
   *root_directory =
       (DirectoryEntry *)malloc(sectors * boot_sector->BytesPerSector);
@@ -96,6 +99,36 @@ const DirectoryEntry *findFile(const BootSector *const boot_sector,
   }
 
   return NULL;
+}
+
+uint8_t readFile(FILE *const disk, const BootSector *const boot_sector,
+                 const uint8_t *const file_allocation_table,
+                 const DirectoryEntry *const file,
+                 const uint32_t root_directory_end, void *output_buffer) {
+  uint16_t current_cluster = file->FirstClusterLow;
+  uint8_t ok = 1;
+
+  do {
+    uint32_t lba = root_directory_end +
+                   (current_cluster - 2) * boot_sector->SectorsPerCluster;
+
+    ok = ok && readSectors(disk, boot_sector, lba,
+                           boot_sector->SectorsPerCluster, output_buffer);
+
+    output_buffer +=
+        boot_sector->SectorsPerCluster * boot_sector->BytesPerSector;
+
+    uint32_t fat_index = current_cluster * 3 / 2;
+    if (current_cluster % 2 == 0) {
+      current_cluster =
+          (*(uint16_t *)(file_allocation_table + fat_index)) & 0x0FFF;
+    } else {
+      current_cluster = (*(uint16_t *)(file_allocation_table + fat_index)) >> 4;
+    }
+
+  } while (ok && current_cluster < 0xFF8);
+
+  return ok;
 }
 
 int main(int argc, char **argv) {
@@ -120,15 +153,17 @@ int main(int argc, char **argv) {
 
   uint8_t *file_allocation_table = NULL;
 
-  if (!readFat(disk, &boot_sector, file_allocation_table)) {
+  if (!readFat(disk, &boot_sector, &file_allocation_table)) {
     fprintf(stderr, "Could not read file allocation table!\n");
     free(file_allocation_table);
     return -4;
   }
 
   DirectoryEntry *root_directory = NULL;
+  uint32_t root_directory_end;
 
-  if (!readRootDirectory(disk, &boot_sector, &root_directory)) {
+  if (!readRootDirectory(disk, &boot_sector, &root_directory,
+                         &root_directory_end)) {
     fprintf(stderr, "Could not read root directory!\n");
     free(file_allocation_table);
     free(root_directory);
@@ -144,7 +179,21 @@ int main(int argc, char **argv) {
     return -6;
   }
 
+  char *file_contents = malloc(file->Size + boot_sector.BytesPerSector);
+
+  if (!readFile(disk, &boot_sector, file_allocation_table, file,
+                root_directory_end, file_contents)) {
+    fprintf(stderr, "Could not read file contents!\n");
+    free(file_allocation_table);
+    free(root_directory);
+    free(file_contents);
+    return -7;
+  }
+
+  printf("%s", file_contents);
+
   free(file_allocation_table);
   free(root_directory);
+  free(file_contents);
   return 0;
 }
