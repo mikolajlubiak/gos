@@ -90,7 +90,7 @@ const DirectoryEntry *findFile(const BootSector *const boot_sector,
                                const char *const filename) {
   for (uint32_t i = 0; i < boot_sector->DirEntryCount; i++) {
     if (memcmp(filename, root_directory[i].Name,
-               sizeof(((DirectoryEntry *)0)->Name))) {
+               sizeof(((DirectoryEntry *)0)->Name)) == 0) {
       return &root_directory[i];
     }
   }
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
 
   const DirectoryEntry *file = findFile(&boot_sector, root_directory, argv[2]);
 
-  if (file == NULL) {
+  if (!file) {
     fprintf(stderr, "Could not find file %s!\n", argv[2]);
     free(file_allocation_table);
     free(root_directory);
