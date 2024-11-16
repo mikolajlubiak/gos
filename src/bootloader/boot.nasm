@@ -90,16 +90,162 @@ main:
 	; Set stack pointer to the bottom address of the program
 	mov sp, 0x7C00
 
+	; Some BIOSes start at 07C0:0000 and not at 0000:07C0
+	; Makes sure the program is in the expected location
+	push es
+	push word .after
+	retf
+
+.after:
+
 	; BIOS should store the driver number in the dl register
 	mov [ebr_drive_number], dl
 
-	; Populate the disk_read parameters
-	mov ax, 1 ; LBA = 1, second sector
-	mov cl, 1 ; Read 1 sector
-	mov bx, 0x7E00 ; Store the data below instructions
+	; Read drive parameters
+	; Use BIOS interrupts instead of data on formatted disk
+	push es
+	mov ah, 08h
+	int 13h
+	jc floppy_error
+	pop es
+
+	and cl, 0x3F					; Remove top 2 bits
+	xor ch, ch
+	mov [bdb_sectors_per_track], cx	; Sector count
+
+	inc dh
+	mov [bdb_head_count], dh		; Head count
+
+	;
+	;	Read FAT root directory
+	;
+
+	; Compute LBA of root directory = reserved + fat_count * sectors_per_fat
+	mov ax, [bdb_sectors_per_fat]
+	mov bl, [bdb_fat_count]
+	xor bh, bh
+	mul bx							; ax = fat_count * sectors_per_fat
+	add ax, [bdb_reserved_sectors]	; ax += reserved_sectors
+	push ax
+
+	; Compute size of root directory = (32 * dir_entries + bytes_per_sector - 1) / bytes_per_sector
+	mov ax, [bdb_dir_entries]
+	shl ax, 5						; ax <<= 5 (ax*=32)
+	add ax, [bdb_bytes_per_sector]	; ax += bytes_per_sector - 1
+	dec ax
+	xor dx, dx
+	div word [bdb_bytes_per_sector]	; ax /= bytes_per_sector
+
+	; Set read function parameters
+	mov cl, al						; cl = root directory size in sectors
+	pop ax							; ax = LBA of root directory
+	mov dl, [ebr_drive_number]		; dl = drive number
+	mov bx, buffer					; es:bx = output buffer
 
 	; Read the data
 	call disk_read
+
+	; Search for kernel.bin
+	xor bx, bx
+	mov di, buffer
+
+.kernel_search:
+	mov si, file_kernel_bin
+	mov cx, 11
+	push di
+
+	; Repeat the byte compare instruction while the bytes are equal
+	; Repeat at most CX (11) times (substracts CX and checks zero flag)
+	repe cmpsb
+	
+	pop di
+
+	; If the strings are equal, jump to .kernel_found
+	je .kernel_found
+
+	; Else move to the next directory entry
+	add di, 32
+	
+	; If not exceeded the count of entries
+	inc bx
+	cmp bx, [bdb_dir_entries]
+	
+	; Repeat the comparison against the next entry
+	jl .kernel_search
+
+	; If searched through every entry and didn't find kernel, display error message
+	jmp kernel_not_found_error
+
+.kernel_found:
+	; di should contain the entry address
+	mov ax, [di + 26]		; First logical cluster field (offset is 26 bytes)
+	mov [kernel_cluster], ax
+
+	; Load File Allocation Table (FAT) from disk
+	mov ax, [bdb_reserved_sectors]
+	mov bx, buffer
+	mov cl, [bdb_sectors_per_fat]
+	mov dl, [ebr_drive_number]
+	call disk_read
+
+	; Read the kernel and process FAT cluster chain
+	mov bx, KERNEL_LOAD_SEGMENT
+	mov es, bx
+	mov bx, KERNEL_LOAD_OFFSET
+
+.load_kernel_loop:
+	; Read next cluster
+	mov ax, [kernel_cluster]
+
+	add ax, 31
+	mov cl, 1
+	mov dl, [ebr_drive_number]
+	call disk_read
+
+	add bx, [bdb_bytes_per_sector]
+
+	; Compute location of the next cluster
+	mov ax, [kernel_cluster]
+	mov cx, 3
+	mul cx
+	mov cx, 2
+	div cx
+
+	mov si, buffer
+	add si, ax
+	mov ax, [ds:si]
+
+	xor dx, dx
+
+	jz .even
+
+.odd:
+	shr ax, 4
+	jmp .next_cluster_after
+
+.even:
+	and ax, 0x0FFF
+
+.next_cluster_after:
+	cmp ax, 0x0FF8
+	jae .read_finish
+
+	mov [kernel_cluster], ax
+	jmp .load_kernel_loop
+
+.read_finish:
+	; Jump to the kernel
+	mov dl, [ebr_drive_number]
+
+	; Set segment registers
+	mov ax, KERNEL_LOAD_SEGMENT
+	mov ds, ax
+	mov es, ax
+
+	jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+
+	; UNREACHABLE
+	jmp wait_key_and_reboot
 
 	; Halt
 	jmp halt
@@ -128,10 +274,20 @@ wait_key_and_reboot:
 ;	Disk routines
 ;
 
+; On floppy error
 ; Print error message and reboot
 floppy_error:
 	; Print the error message
 	mov si, msg_floppy_error
+	call puts
+
+	jmp wait_key_and_reboot
+
+; When kernel wasn't found
+; Print error message and reboot
+kernel_not_found_error:
+	; Print the error message
+	mov si, msg_kernel_not_found_error
 	call puts
 
 	jmp wait_key_and_reboot
@@ -284,12 +440,21 @@ disk_reset:
 ; Define end line escape sequence
 %define ENDL 0x0D, 0x0A
 
-; Store the string
-msg_floppy_error: 		db "Read from floppy failed 3 times. KERNEL PAAAAAAAAANIC! or something... idk", ENDL, 0
+; Store the strings
+msg_floppy_error: 				db "Read from floppy failed 3 times!", ENDL, 0
+msg_kernel_not_found_error: 	db "Could not find the kernel", ENDL, 0
+file_kernel_bin:				db "KERNEL  BIN"
+kernel_cluster:					dw 0
 
+; The program doesn't use 32 bit protected mode so we store the kernel data at address 0x2000
+KERNEL_LOAD_SEGMENT				equ 0x2000
+KERNEL_LOAD_OFFSET				equ 0 
 
 ; Add padding until we reach 510 bytes
 times 510-($-$$) db 0
 
 ; Set the last two bytes to the signature
 dw 0AA55h
+
+; Output buffer of the disk read
+buffer:
