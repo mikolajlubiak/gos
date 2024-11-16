@@ -285,7 +285,7 @@ disk_reset:
 %define ENDL 0x0D, 0x0A
 
 ; Store the string
-msg_floppy_error: 		db "Read from floppy failed 3 times. KERNEL PAAAAAAAAANIC!", ENDL, 0
+msg_floppy_error: 		db "Read from floppy failed 3 times. KERNEL PAAAAAAAAANIC! or something... idk", ENDL, 0
 
 
 ; Add padding until we reach 510 bytes
