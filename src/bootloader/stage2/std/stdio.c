@@ -1,17 +1,18 @@
 #include "stdio.h"
 #include "x86.h"
 
-void putc(char c) { x86_Video_WriteCharTeletype(c, 0); }
+void putc(const char c) {
+  if (c == '\n') {
+    x86_Video_WriteCharTeletype(0x0D, 0);
+    x86_Video_WriteCharTeletype(0x0A, 0);
+  } else {
+    x86_Video_WriteCharTeletype(c, 0);
+  }
+}
 
 void puts(const char *str) {
   while (*str) {
-    if (*str == '\n') {
-      putc(0x0D);
-      putc(0x0A);
-    } else {
-      putc(*str);
-    }
-
+    putc(*str);
     str++;
   }
 }

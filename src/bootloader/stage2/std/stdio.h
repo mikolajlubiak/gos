@@ -1,4 +1,4 @@
 #pragma once
 
-void putc(char c);
+void putc(const char c);
 void puts(const char *str);
