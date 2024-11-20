@@ -145,12 +145,12 @@ main:
 	; Read the data
 	call disk_read
 
-	; Search for kernel.bin
+	; Search for stage2.bin
 	xor bx, bx
 	mov di, buffer
 
-.kernel_search:
-	mov si, file_kernel_bin
+.stage2_search:
+	mov si, file_stage2_bin
 	mov cx, 11
 	push di
 
@@ -160,8 +160,8 @@ main:
 	
 	pop di
 
-	; If the strings are equal, jump to .kernel_found
-	je .kernel_found
+	; If the strings are equal, jump to .stage2_found
+	je .stage2_found
 
 	; Else move to the next directory entry
 	add di, 32
@@ -171,15 +171,15 @@ main:
 	cmp bx, [bdb_dir_entries]
 	
 	; Repeat the comparison against the next entry
-	jl .kernel_search
+	jl .stage2_search
 
-	; If searched through every entry and didn't find kernel, display error message
-	jmp kernel_not_found_error
+	; If searched through every entry and didn't find stage2, display error message
+	jmp stage2_not_found_error
 
-.kernel_found:
+.stage2_found:
 	; di should contain the entry address
 	mov ax, [di + 26]		; First logical cluster field (offset is 26 bytes)
-	mov [kernel_cluster], ax
+	mov [stage2_cluster], ax
 
 	; Load File Allocation Table (FAT) from disk
 	mov ax, [bdb_reserved_sectors]
@@ -188,14 +188,14 @@ main:
 	mov dl, [ebr_drive_number]
 	call disk_read
 
-	; Read the kernel and process FAT cluster chain
-	mov bx, KERNEL_LOAD_SEGMENT
+	; Read the stage2 and process FAT cluster chain
+	mov bx, STAGE2_LOAD_SEGMENT
 	mov es, bx
-	mov bx, KERNEL_LOAD_OFFSET
+	mov bx, STAGE2_LOAD_OFFSET
 
-.load_kernel_loop:
+.load_stage2_loop:
 	; Read next cluster
-	mov ax, [kernel_cluster]
+	mov ax, [stage2_cluster]
 
 	add ax, 31
 	mov cl, 1
@@ -205,7 +205,7 @@ main:
 	add bx, [bdb_bytes_per_sector]
 
 	; Compute location of the next cluster
-	mov ax, [kernel_cluster]
+	mov ax, [stage2_cluster]
 	mov cx, 3
 	mul cx
 	mov cx, 2
@@ -230,19 +230,19 @@ main:
 	cmp ax, 0x0FF8
 	jae .read_finish
 
-	mov [kernel_cluster], ax
-	jmp .load_kernel_loop
+	mov [stage2_cluster], ax
+	jmp .load_stage2_loop
 
 .read_finish:
-	; Jump to the kernel
+	; Jump to the stage2
 	mov dl, [ebr_drive_number]
 
 	; Set segment registers
-	mov ax, KERNEL_LOAD_SEGMENT
+	mov ax, STAGE2_LOAD_SEGMENT
 	mov ds, ax
 	mov es, ax
 
-	jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+	jmp STAGE2_LOAD_SEGMENT:STAGE2_LOAD_OFFSET
 
 	; UNREACHABLE
 	jmp wait_key_and_reboot
@@ -283,11 +283,11 @@ floppy_error:
 
 	jmp wait_key_and_reboot
 
-; When kernel wasn't found
+; When stage2 wasn't found
 ; Print error message and reboot
-kernel_not_found_error:
+stage2_not_found_error:
 	; Print the error message
-	mov si, msg_kernel_not_found_error
+	mov si, msg_stage2_not_found_error
 	call puts
 
 	jmp wait_key_and_reboot
@@ -375,7 +375,7 @@ disk_read:
 	; Retry the read operation 3 times. Floppy disks can be pretty unreliable.
 	mov di, 3
 
-.retry
+.retry:
 	; Save all registers, we don't know what BIOS will override
 	pusha
 
@@ -442,13 +442,13 @@ disk_reset:
 
 ; Store the strings
 msg_floppy_error: 				db "Read from floppy failed 3 times!", ENDL, 0
-msg_kernel_not_found_error: 	db "Could not find the kernel", ENDL, 0
-file_kernel_bin:				db "KERNEL  BIN"
-kernel_cluster:					dw 0
+msg_stage2_not_found_error: 	db "Could not find the stage 2", ENDL, 0
+file_stage2_bin:				db "STAGE2  BIN"
+stage2_cluster:					dw 0
 
-; The program doesn't use 32 bit protected mode so we store the kernel data at address 0x2000
-KERNEL_LOAD_SEGMENT				equ 0x2000
-KERNEL_LOAD_OFFSET				equ 0 
+; The program doesn't use 32 bit protected mode so we store the stage2 data at address 0x2000
+STAGE2_LOAD_SEGMENT				equ 0x2000
+STAGE2_LOAD_OFFSET				equ 0 
 
 ; Add padding until we reach 510 bytes
 times 510-($-$$) db 0

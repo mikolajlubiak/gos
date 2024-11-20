@@ -1,3 +1,4 @@
 build/
 .vscode/
 bx_enh_dbg.ini
+*.err

@@ -20,24 +20,35 @@ ${BUILD_DIR}/main_floppy.img: bootloader kernel
 	mkfs.fat -F 12 -n "GOS" ${BUILD_DIR}/main_floppy.img
 
 # Write the bootloader
-	dd if=${BUILD_DIR}/bootloader.bin of=${BUILD_DIR}/main_floppy.img conv=notrunc
+	dd if=${BUILD_DIR}/stage1.bin of=${BUILD_DIR}/main_floppy.img conv=notrunc
+
+# Copy the stage 2 bootloader
+	mcopy -i ${BUILD_DIR}/main_floppy.img ${BUILD_DIR}/stage2.bin "::stage2.bin"
 
 # Copy the kernel
 	mcopy -i ${BUILD_DIR}/main_floppy.img ${BUILD_DIR}/kernel.bin "::kernel.bin"
 
 
 # Bootloader
-bootloader: ${BUILD_DIR}/bootloader.bin
+bootloader: stage1 stage2
 
-${BUILD_DIR}/bootloader.bin: always
-	${ASM} ${SRC_DIR}/bootloader/boot.nasm -f bin -o ${BUILD_DIR}/bootloader.bin
+# Stage 1 bootloader
+stage1: ${BUILD_DIR}/stage1.bin
 
+${BUILD_DIR}/stage1.bin: always
+	${MAKE} -C ${SRC_DIR}/bootloader/stage1 BUILD_DIR=${abspath ${BUILD_DIR}}
+
+# Stage 2 bootloader
+stage2: ${BUILD_DIR}/stage2.bin
+
+${BUILD_DIR}/stage2.bin: always
+	${MAKE} -C ${SRC_DIR}/bootloader/stage2 BUILD_DIR=${abspath ${BUILD_DIR}}
 
 # Kernel
 kernel: ${BUILD_DIR}/kernel.bin
 
 ${BUILD_DIR}/kernel.bin: always
-	${ASM} ${SRC_DIR}/kernel/kernel.nasm -f bin -o ${BUILD_DIR}/kernel.bin
+	${MAKE} -C ${SRC_DIR}/kernel BUILD_DIR=${abspath ${BUILD_DIR}}
 
 #
 # Tools
@@ -55,4 +66,7 @@ alwyas:
 
 # Clean
 clean:
+	${MAKE} -C ${SRC_DIR}/bootloader/stage1 BUILD_DIR=${abspath ${BUILD_DIR}} clean
+	${MAKE} -C ${SRC_DIR}/bootloader/stage2 BUILD_DIR=${abspath ${BUILD_DIR}} clean
+	${MAKE} -C ${SRC_DIR}/kernel BUILD_DIR=${abspath ${BUILD_DIR}} clean
 	rm -rf ${BUILD_DIR}/*
