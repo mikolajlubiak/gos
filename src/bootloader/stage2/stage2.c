@@ -2,7 +2,10 @@
 #include "std/stdio.h"
 
 void _cdecl cstart_(uint16_t boot_driver_number) {
-  puts("Hello, World! I'm C.");
+  uint8_t i;
+  for (i = 0; i < 16; i++) {
+    puts("Hello, World! I'm C.\n");
+  }
 
   for (;;)
     ;
