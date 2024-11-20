@@ -8,8 +8,8 @@ ASMFLAGS ?= -f obj
 
 LD16 ?= /usr/bin/watcom/binl64/wlink
 
-SOURCES_C := ${wildcard *.c}
-SOURCES_ASM := ${wildcard *.asm}
+SOURCES_C := ${wildcard *.c std/*.c}
+SOURCES_ASM := ${wildcard *.asm std/*.asm}
 OBJECTS_C := ${patsubst %.c, ${BUILD_DIR}/stage2/c/%.obj, ${SOURCES_C}}
 OBJECTS_ASM := ${patsubst %.asm, ${BUILD_DIR}/stage2/asm/%.obj, ${SOURCES_ASM}}
 
@@ -33,9 +33,10 @@ ${BUILD_DIR}/stage2/asm/%.obj: %.asm always
 always:
 	mkdir -p ${BUILD_DIR}/stage2/c
 	mkdir -p ${BUILD_DIR}/stage2/asm
+	mkdir -p ${BUILD_DIR}/stage2/c/std
+	mkdir -p ${BUILD_DIR}/stage2/asm/std
 
 
 # Clean
 clean:
 	rm ${BUILD_DIR}/stage2.bin
-	rm ./*.err

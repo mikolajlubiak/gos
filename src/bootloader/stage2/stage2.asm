@@ -1,8 +1,9 @@
 bits 16
+
 section _ENTRY class=code
 extern _cstart_
-global entry
 
+global entry
 entry:
 	cli
 	mov ax, ds
