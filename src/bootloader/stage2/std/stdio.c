@@ -33,11 +33,11 @@ typedef enum e_PrintfLengthState {
   PRINTF_LENGTH_LONG_LONG,
 } PrintfLengthState;
 
-int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
-                           uint16_t radix);
+uint16_t *printf_format_numbers(uint16_t *argp, PrintfLengthState length,
+                                bool sign, uint16_t radix);
 
 void _cdecl printf(const char *fmt, ...) {
-  int *argp = (int *)&fmt;
+  uint16_t *argp = (uint16_t *)&fmt;
   PrintfState state = PRINTF_STATE_NORMAL;
   PrintfLengthState length = PRINTF_LENGTH_DEFAULT;
   uint16_t radix = 10;
@@ -75,6 +75,7 @@ void _cdecl printf(const char *fmt, ...) {
         break;
 
       default:
+        state = PRINTF_STATE_SPECIFIER;
         break;
       }
       break;
@@ -115,7 +116,7 @@ void _cdecl printf(const char *fmt, ...) {
         break;
 
       case 's':
-        puts(*(const char **)argp);
+        puts((const char *)*argp);
         argp++;
         break;
 
@@ -167,14 +168,14 @@ void _cdecl printf(const char *fmt, ...) {
   }
 }
 
-int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
-                           uint16_t radix) {
+uint16_t *printf_format_numbers(uint16_t *argp, PrintfLengthState length,
+                                bool sign, uint16_t radix) {
   const char HEX_CHARS[] = "0123456789abcdef";
 
   char buffer[32];
   uint64_t number;
   bool negative = false;
-  uint16_t pos = 0;
+  int16_t pos = 0;
 
   switch (length) {
   case PRINTF_LENGTH_SHORT_SHORT:
@@ -184,10 +185,13 @@ int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
       int16_t n = *argp;
 
       if (n < 0) {
+        n = -n;
         negative = true;
       }
 
       number = (uint64_t)n;
+    } else {
+      number = *(uint16_t *)argp;
     }
 
     argp++;
@@ -195,13 +199,16 @@ int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
 
   case PRINTF_LENGTH_LONG:
     if (sign) {
-      int32_t n = *argp;
+      int32_t n = *(int32_t *)argp;
 
       if (n < 0) {
+        n = -n;
         negative = true;
       }
 
       number = (uint64_t)n;
+    } else {
+      number = *(uint32_t *)argp;
     }
 
     argp += 2;
@@ -209,13 +216,16 @@ int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
 
   case PRINTF_LENGTH_LONG_LONG:
     if (sign) {
-      int64_t n = *argp;
+      int64_t n = *(int64_t *)argp;
 
       if (n < 0) {
+        n = -n;
         negative = true;
       }
 
       number = (uint64_t)n;
+    } else {
+      number = *(uint64_t *)argp;
     }
 
     argp += 4;
@@ -225,18 +235,21 @@ int *printf_format_numbers(int *argp, PrintfLengthState length, bool sign,
     break;
   }
 
+  // Convert to ASCII
   do {
     uint32_t rem;
     x86_div64_32(number, radix, &number, &rem);
     buffer[pos++] = HEX_CHARS[rem];
   } while (number > 0);
 
+  // Add sign
   if (sign && negative) {
     buffer[pos++] = '-';
   }
 
-  while (pos > 0) {
-    putc(buffer[pos--]);
+  // Print number in reverse order
+  while (pos-- > 0) {
+    putc(buffer[pos]);
   }
 
   return argp;
