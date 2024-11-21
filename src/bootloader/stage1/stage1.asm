@@ -215,7 +215,7 @@ main:
 	add si, ax
 	mov ax, [ds:si]
 
-	xor dx, dx
+	or dx, dx
 
 	jz .even
 
