@@ -1,7 +1,7 @@
 BUILD_DIR ?= build
 
 CC16 ?= /usr/bin/watcom/binl64/wcc
-CFLAGS16 ?= -d3 -s -wx -ms -zl -zq
+CFLAGS16 ?= -d3 -s -wx -ms -zl -zq -za99
 
 ASM ?= nasm
 ASMFLAGS ?= -f obj

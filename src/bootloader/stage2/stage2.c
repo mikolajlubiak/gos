@@ -2,8 +2,7 @@
 #include "std/stdio.h"
 
 void _cdecl cstart_(uint16_t boot_driver_number) {
-  int16_t i;
-  for (i = -64; i < 0; i++) {
+  for (int16_t i = -64; i < 0; i++) {
     printf("Hello, World! I'm C. %d\n", i);
   }
 
@@ -15,6 +14,6 @@ void _cdecl cstart_(uint16_t boot_driver_number) {
          (uint32_t)0xdeadbeef, (int64_t)10200300400,
          (uint64_t)0xdeadbeeffeebdaed);
 
-  for (;;)
+  while (true)
     ;
 }
