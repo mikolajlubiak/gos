@@ -27,6 +27,8 @@ ${BUILD_DIR}/main_floppy.img: bootloader kernel
 
 # Copy the kernel
 	mcopy -i ${BUILD_DIR}/main_floppy.img ${BUILD_DIR}/kernel.bin "::kernel.bin"
+# Copy test file
+	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::test.txt"
 
 
 # Bootloader

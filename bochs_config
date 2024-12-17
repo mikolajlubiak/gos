@@ -1,5 +1,5 @@
 megs: 128
-romimage: file=/usr/share/bochs/BIOS-bochs-legacy, address=0xffff0000
+romimage: file=/usr/share/bochs/BIOS-bochs-legacy
 vgaromimage: file=/usr/share/bochs/VGABIOS-lgpl-latest
 floppya: 1_44=build/main_floppy.img, status=inserted
 boot: floppy

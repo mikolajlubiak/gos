@@ -143,7 +143,7 @@ _x86_Disk_Reset:
 ;               uint16_t sector number,
 ;               uint16_t head number,
 ;               uint8_t sectors to read count,
-;               uint8_t far* data buffer
+;               void far* data buffer
 ;
 global _x86_Disk_Read
 _x86_Disk_Read:
@@ -173,7 +173,7 @@ _x86_Disk_Read:
 
     mov al, [bp+8] ; Lower 6 bits are sector number
     and al, 3Fh
-    xor cl, al
+    or cl, al
 
     mov dh, [bp+10]  ; Head number
 
@@ -316,6 +316,35 @@ __U4D:
     shr ecx, 16
 
     ; DX:AX = quotient
+    mov edx, eax
+    shr edx, 16
+
+    ; Return
+    ret
+
+;========================================================================
+;==     Name:           U4M                                            ==
+;==     Operation:      Integer 4 byte multiply                        ==
+;==     Inputs:         DX;AX   Integer M1                             ==
+;==                     CX;BX   Ingerger M2                            ==
+;==     Outputs:        DX;AX   Product                                ==
+;==     Volatile:       CX;BX   Destroyed                              ==
+;========================================================================
+global __U4M
+__U4M:
+    shl edx, 16     ; Move DX to upper half of EDX
+    mov dx, ax      ; EDX = M1
+    mov eax, edx    ; EAX = M1
+    xor edx, edx
+
+    shl ecx, 16     ; Move CX to upper half of ECX
+    mov cx, bx      ; ECX = M2
+
+    ; Divide
+    ; EDX:EAX = Product
+    mul ecx
+
+    ; DX:AX = Product
     mov edx, eax
     shr edx, 16
 

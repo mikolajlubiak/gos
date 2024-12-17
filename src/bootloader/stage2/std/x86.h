@@ -12,7 +12,7 @@ bool _cdecl x86_Disk_Reset(uint8_t drive);
 
 // Read data from disk
 bool _cdecl x86_Disk_Read(uint8_t drive, uint16_t cylinder, uint16_t sector,
-                          uint16_t head, uint8_t count, uint8_t far *dataOut);
+                          uint16_t head, uint8_t count, void far *dataOut);
 
 // Get drive parameters
 bool _cdecl x86_Disk_GetDriveParams(uint8_t drive, uint8_t *driveTypeOut,

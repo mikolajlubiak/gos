@@ -17,21 +17,12 @@ void puts(const char *str) {
   }
 }
 
-typedef enum e_PrintfState {
-  PRINTF_STATE_NORMAL,
-  PRINTF_STATE_LENGTH,
-  PRINTF_STATE_SPECIFIER,
-  PRINTF_STATE_LENGTH_SHORT,
-  PRINTF_STATE_LENGTH_LONG,
-} PrintfState;
-
-typedef enum e_PrintfLengthState {
-  PRINTF_LENGTH_SHORT_SHORT,
-  PRINTF_LENGTH_SHORT,
-  PRINTF_LENGTH_DEFAULT,
-  PRINTF_LENGTH_LONG,
-  PRINTF_LENGTH_LONG_LONG,
-} PrintfLengthState;
+void sputs(const char *str, size_t length) {
+  for (size_t i = 0; i < length; i++) {
+    putc(*str);
+    str++;
+  }
+}
 
 uint16_t *printf_format_numbers(uint16_t *argp, PrintfLengthState length,
                                 bool sign, uint16_t radix);
