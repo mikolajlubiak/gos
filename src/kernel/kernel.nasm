@@ -56,4 +56,4 @@ puts:
 %define ENDL 0x0D, 0x0A
 
 ; Store the strings
-msg_hello: db 'Hello, world! Its me, the KERNEL!', ENDL, 0
+msg_hello: db "Hello, world! It's me, the KERNEL!", ENDL, 0
